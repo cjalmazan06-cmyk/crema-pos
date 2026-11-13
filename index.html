@@ -706,6 +706,13 @@ body.dark .netpill{background:#4A3416;color:#F0C98A}
 .rcpt .gqr{width:34mm;max-width:100%;margin:6px auto}
 .rcpt .gqr svg{width:100%;height:auto;display:block}
 
+/* ===== v15: menu cards keep their own height (a tall flavors card no longer stretches its neighbours) ===== */
+#grid{align-items:start}
+
+/* v15b: each menu card keeps its own height */
+.grid{align-items:start;align-content:start}
+.grid > .tile,.grid > .fam{align-self:start;height:auto}
+
 </style>
 </head>
 <body>
@@ -2673,6 +2680,7 @@ if (!loadedSettings.v || loadedSettings.v < 6) {
 }
 
 let me = null;                                       /* the person signed in */
+const APP_VERSION = 'v15b · 13 Nov 2026';
 const isManager = () => !!me && me.role === 'manager';
 /* Roles: what each kind of staff member can do */
 const ROLES = {
@@ -5441,7 +5449,7 @@ function renderSettings() {
   const url = appURL(), isFile = !/^https?:/.test(url);
   const ck = (path, on, label) => '<label class="check"><input type="checkbox" data-setting="' + path + '"' + (on ? ' checked' : '') + '> ' + label + '</label>';
   const jumps = [['Receipt', 'bx-receipt'], ['Tax and charges', 'bx-tax-and-charges'], ['Checkout options', 'bx-checkout-options'], ['Discounts', 'bx-discounts'], ['Expense categories', 'bx-expense-categories'], ['Loyalty', 'bx-loyalty-program'], ['Locations', 'bx-locations-and-pop-ups'], ['Shifts and security', 'bx-shifts-and-security'], ['Stock', 'bx-stock'], ['Targets', 'bx-targets'], ['Offline', 'bx-offline-use'], ['Share and devices', 'bx-share-and-devices'], ['Appearance', 'bx-appearance'], ['Backup', 'bx-backup']];
-  $('#view').innerHTML = '<div class="page"><div class="page-head"><h2>Settings</h2></div><div class="chips" style="margin-bottom:10px">' + jumps.map(j => '<button class="chip" data-act="jump" data-v="' + j[1] + '">' + j[0] + '</button>').join('') + '</div>' +
+  $('#view').innerHTML = '<div class="page"><div class="page-head"><h2>Settings</h2></div><div class="chips" style="margin-bottom:10px">' + jumps.map(j => '<button class="chip" data-act="jump" data-v="' + j[1] + '">' + j[0] + '</button>').join('') + '</div>' + '<p class="muted small" style="margin:-2px 0 10px">App version: ' + APP_VERSION + '</p>' +
     box('Receipt',
       '<label class="f"><span>Shop name</span><input data-setting="shopName" value="' + esc(S.shopName) + '"></label>' +
       '<label class="f"><span>Tagline (optional)</span><input data-setting="tagline" value="' + esc(S.tagline) + '" placeholder="e.g. Coffee &amp; Ice Cream"></label>' +
