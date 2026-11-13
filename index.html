@@ -2690,7 +2690,7 @@ if (!loadedSettings.v || loadedSettings.v < 6) {
 }
 
 let me = null;                                       /* the person signed in */
-const APP_VERSION = 'v16 · 13 Nov 2026';
+const APP_VERSION = 'v17 · 13 Nov 2026';
 let installEvt = null, wakeLock = null, wakePending = false;   /* phone install prompt and screen-awake state */
 const isManager = () => !!me && me.role === 'manager';
 /* Roles: what each kind of staff member can do */
@@ -5416,11 +5416,39 @@ const appURL = () => location.href.split('#')[0].split('?')[0];
 function qrCardHTML() {
   return '<div class="rcpt">' + (settings.printLogo !== false ? '<div class="c"><img class="rlogo" alt="" src="' + LOGO.mono + '"></div>' : '') + '<div class="c shop">' + esc(settings.shopName) + '</div><div class="c">Open the POS</div><div style="width:44mm;margin:6px auto">' + makeQR(appURL()) + '</div><div class="c" style="font-size:10px;word-break:break-all">' + esc(appURL()) + '</div><hr><div class="c">1. Scan or open the link<br>2. Tap your name<br>3. Enter your PIN<br>4. Open the shift and start selling</div></div>';
 }
-function syncExport(range) {
+function syncBuild(range) {
   const r = periodRange(range), inR = ts => ts >= r[0] && ts < r[1];
-  const data = { app: 'crema-pos-sync', version: 1, exportedAt: new Date().toISOString(), orders: orders.filter(o => inR(o.ts)), expenses: expenses.filter(e => inR(e.ts)), shifts: shifts.filter(s => inR(s.openedAt)), timeclock: timeclock.filter(e => inR(e.inAt)), stocklog: stocklog.filter(e => inR(e.ts)) };
-  downloadFile('crema-sales-sync-' + dayKey() + '.json', JSON.stringify(data), 'application/json');
-  logAct('Sync file downloaded', data.orders.length + ' orders');
+  const data = { app: 'crema-pos-sync', version: 1, exportedAt: new Date().toISOString(), sentBy: me ? me.name : '', location: settings.location, orders: orders.filter(o => inR(o.ts)), expenses: expenses.filter(e => inR(e.ts)), shifts: shifts.filter(s => inR(s.openedAt)), timeclock: timeclock.filter(e => inR(e.inAt)), stocklog: stocklog.filter(e => inR(e.ts)) };
+  const who = me ? '-' + me.name.toLowerCase().replace(/[^a-z0-9]+/g, '') : '';
+  return { data: data, name: 'crema-sales-sync-' + dayKey() + who + '.json', text: JSON.stringify(data) };
+}
+function syncExport(range) {
+  const f = syncBuild(range);
+  downloadFile(f.name, f.text, 'application/json');
+  logAct('Sync file downloaded', f.data.orders.length + ' orders');
+}
+const SD_RANGES = [['today', 'Today'], ['yesterday', 'Yesterday'], ['7d', 'Last 7 days'], ['30d', 'Last 30 days'], ['all', 'Everything on this device']];
+function sdSummary(range) { const d = syncBuild(range).data; return d.orders.length + ' orders, ' + d.expenses.length + ' expenses, ' + d.shifts.length + ' shifts, ' + d.timeclock.length + ' time clock entries'; }
+function openSendData() {
+  openModal('<h2>Send data to owner</h2>' +
+    '<p class="muted small" style="margin-bottom:10px">This makes a file with this device’s sales, expenses, shifts and time clock records. Send it to the owner by message or email. The owner loads it under Settings → Share and devices → Merge a sync file. It has no PINs or settings.</p>' +
+    '<label class="f"><span>Which days?</span><select id="sd-range">' + optHTML(SD_RANGES, 'today') + '</select></label>' +
+    '<p class="muted small" id="sd-sum" style="margin:-4px 0 12px">' + esc(sdSummary('today')) + '</p>' +
+    '<div class="actions"><button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="sd-go">' + (navigator.share ? 'Send file' : 'Download file') + '</button></div>');
+}
+async function sendDataGo() {
+  const range = $('#sd-range') ? $('#sd-range').value : 'today', f = syncBuild(range);
+  logAct('Data sent to owner', f.data.orders.length + ' orders, ' + (SD_RANGES.find(r => r[0] === range) || ['', range])[1]);
+  try {
+    const file = new File([f.text], f.name, { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Crema sales data', text: 'Crema sales data from ' + (me ? me.name : 'staff') });
+      closeModal(); toast('Data sent'); return;
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;   /* they closed the share sheet */
+  }
+  downloadFile(f.name, f.text, 'application/json'); closeModal(); toast('File saved. Send it to the owner.');
 }
 function syncMerge(d) {
   const addNew = (local, inc0) => { const inc = cleanList(inc0); const have = {}; local.forEach(x => { have[x.id] = x; }); let add = 0, upd = 0; const fresh = []; inc.forEach(x => { const l = have[x.id]; if (!l) { local.push(x); fresh.push(x); add++; } else if (x.status === 'voided' && l.status !== 'voided') { Object.assign(l, x); upd++; } }); return { add: add, upd: upd, fresh: fresh }; };
@@ -5641,7 +5669,7 @@ function openAccountMenu() {
   if (!me) return;
   const c = clockOf(me.id);
   openModal('<h2>' + esc(me.name) + '</h2><p class="muted" style="margin-bottom:12px">' + (me.title ? esc(me.title) + ' · ' : '') + esc(roleLabel(me.role)) + '</p>' +
-    '<div class="menu-list"><button class="btn big" data-act="lock">Switch user / lock</button><button class="btn" data-act="clock-me">' + (c ? 'Clock out' : 'Clock in') + '</button><button class="btn" data-act="profile">My profile and PIN</button><button class="btn" data-act="theme-close">' + (settings.theme === 'dark' ? 'Light mode' : 'Dark mode') + '</button><button class="btn" data-act="side">' + (settings.sideCollapsed ? 'Show side menu' : 'Hide side menu') + '</button></div>' +
+    '<div class="menu-list"><button class="btn big" data-act="lock">Switch user / lock</button><button class="btn" data-act="clock-me">' + (c ? 'Clock out' : 'Clock in') + '</button><button class="btn" data-act="send-data">Send data to owner</button><button class="btn" data-act="profile">My profile and PIN</button><button class="btn" data-act="theme-close">' + (settings.theme === 'dark' ? 'Light mode' : 'Dark mode') + '</button><button class="btn" data-act="side">' + (settings.sideCollapsed ? 'Show side menu' : 'Hide side menu') + '</button></div>' +
     '<div class="actions"><button class="btn" data-act="close">Close</button></div>');
 }
 
@@ -5814,6 +5842,10 @@ const handlers = {
   'an-csv': () => exportAnalyticsCSV(),
   'an-items-csv': () => exportSoldItemsCSV(),
   'an-print': () => printAnalytics(),
+
+  /* send data to the owner */
+  'send-data': () => { closeModal(); openSendData(); },
+  'sd-go': () => sendDataGo(),
 
   /* install */
   install: () => { if (installEvt) { const ev = installEvt; ev.prompt(); if (ev.userChoice) ev.userChoice.then(function () { installEvt = null; if (ui.tab === 'settings') renderSettings(); }); } },
@@ -6017,6 +6049,8 @@ document.addEventListener('change', function (e) {
   } else if (t.dataset.tx && t.dataset.tx !== 'q') {
     ui.tx[t.dataset.tx] = t.type === 'checkbox' ? t.checked : t.value;
     if (t.dataset.tx === 'period') renderSales(); else renderTxBody();
+  } else if (t.id === 'sd-range') {
+    const sm = $('#sd-sum'); if (sm) sm.textContent = sdSummary(t.value);
   } else if (t.id === 'st-role') {
     const dd = $('#st-roledesc'); if (dd) dd.textContent = (ROLES[t.value] || { desc: '' }).desc + ' See the full table under Team → What each role can do.';
   } else if (t.id === 'ex-cat') {
